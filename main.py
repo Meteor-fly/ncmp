@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -14,6 +15,8 @@ TRIGGER_LABELS = {
     "workflow_dispatch": "手动触发",
     "schedule": "定时触发",
 }
+
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 
 
 def build_run_url() -> str:
@@ -38,7 +41,7 @@ def build_report(logger: Logger, status: str, summary: str) -> str:
         "网易云音乐合伙人自动评分执行报告",
         "",
         f"执行结果：{status}",
-        f"执行时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"执行时间：{datetime.now(SHANGHAI_TZ).strftime('%Y-%m-%d %H:%M:%S')}",
         f"触发方式：{trigger}",
         f"仓库：{repository}",
         f"分支：{branch}",

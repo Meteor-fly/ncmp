@@ -24,6 +24,7 @@ jobs:
 
       - name: Run script
         env:
+          TZ: Asia/Shanghai
           MUSIC_U: ${{ secrets.MUSIC_U }}
           CSRF: ${{ secrets.CSRF }}
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
@@ -34,4 +35,5 @@ jobs:
           WAIT_TIME_MAX: ${{ secrets.WAIT_TIME_MAX }}
           SCORE: ${{ secrets.SCORE }}
           FULL_EXTRA_TASKS: ${{ secrets.FULL_EXTRA_TASKS }}
+          SYNC_YUN_CIRCLE: ${{ secrets.SYNC_YUN_CIRCLE }}
         run: python main.py
