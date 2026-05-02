@@ -75,9 +75,9 @@ class Signer:
         return "".join(random.choice(string.ascii_letters + string.digits) for _ in range(length))
 
     def _add_to_16(self, text: str) -> bytes:
-        pad = 16 - len(text) % 16
-        text = text + chr(pad) * pad
-        return text.encode("utf-8")
+        data = text.encode("utf-8")
+        pad = 16 - len(data) % 16
+        return data + bytes([pad] * pad)
 
     def _aes_encrypt(self, text: str, key: str) -> str:
         encryptor = AES.new(key.encode("utf-8"), AES.MODE_CBC, self.iv.encode("utf-8"))
