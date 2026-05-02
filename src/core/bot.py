@@ -17,22 +17,25 @@ class MusicPartnerBot:
             "user_info": "https://music.163.com/api/nuser/account/get",
         }
 
-    def run(self) -> bool:
+    def run(self, run_extra: bool = True) -> bool:
         try:
             self._verify_user()
-            
+
             # 处理基础评分任务
             daily_task = DailyTask(self.session, self.logger, self.config)
             complete, task_data = daily_task._get_daily_tasks()
             if not complete:
                 daily_task._process_tasks(task_data)
-            
+
             # 处理额外评分任务
-            extra_task = ExtraTask(self.session, self.logger, self.config)
-            extra_task.process_extra_tasks(task_data["id"])
-            
+            if run_extra:
+                extra_task = ExtraTask(self.session, self.logger, self.config)
+                extra_task.process_extra_tasks(task_data["id"])
+            else:
+                self.logger.info("当前为基础任务模式，跳过额外评分任务")
+
             return True
-            
+
         except Exception as e:
             self.logger.error(f"执行失败: {str(e)}")
             return False

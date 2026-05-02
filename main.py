@@ -86,19 +86,28 @@ def main():
             )
             return
 
+        task_mode = os.getenv("TASK_MODE", "") or "auto"
+        if task_mode == "auto":
+            # 自动模式：每周日执行完整任务（含额外任务），其余日期仅执行基础任务
+            is_sunday = datetime.now(SHANGHAI_TZ).weekday() == 6
+            run_extra = is_sunday
+        else:
+            run_extra = task_mode == "full"
+
         bot = MusicPartnerBot(config, logger, session)
-        success = bot.run()
+        success = bot.run(run_extra=run_extra)
 
         end_message = "执行成功" if success else "执行失败"
         logger.end(end_message, not success)
 
+        mode_label = "基础任务" if not run_extra else "完整任务（含额外任务）"
         if success:
             notifier.send_notification(
                 "网易云音乐合伙人 - 自动评分成功报告",
                 build_report(
                     logger,
                     "成功",
-                    "自动评分任务已完成，请查看下方详细日志了解本次评分和额外任务处理情况。",
+                    f"本次执行模式：{mode_label}\n自动评分任务已完成，请查看下方详细日志了解执行情况。",
                 ),
             )
         else:
