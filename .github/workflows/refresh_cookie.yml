@@ -1,8 +1,8 @@
 name: Refresh Cookie                                                                                                                                            
                                                                                                                                                                   
-  on:                                                                                                                                                             
+on:                                                                                                                                                             
     schedule:                                                                                                                                                     
-      - cron: '0 14 * * 0'  # 每周日UTC 14:00 (北京时间22:00)                                                                                                     
+      - cron: '0 14 * * 0'                                                                                                                                        
     workflow_dispatch:                                                                                                                                            
                                                                                                                                                                   
   jobs:                                                                                                                                                           
@@ -16,7 +16,7 @@ name: Refresh Cookie
       - name: Set up Python                                                                                                                                       
         uses: actions/setup-python@v5                                                                                                                             
         with:                                                                                                                                                     
-          python-version: '3.x'                                                                                                                                   
+          python-version: '3.x'                             
                                                                                                                                                                   
       - name: Install dependencies                                                                                                                                
         run: |                                                                                                                                                    
@@ -25,7 +25,7 @@ name: Refresh Cookie
                                                                                                                                                                   
       - name: Run refresh script                                                                                                                                  
         env:                                                                                                                                                      
-          MUSIC_U: ${{ secrets.MUSIC_U }}                                                                                                                         
+          MUSIC_U: ${{ secrets.MUSIC_U }}                   
           CSRF: ${{ secrets.CSRF }}                                                                                                                               
           NETEASE_PHONE: ${{ secrets.NETEASE_PHONE }}                                                                                                             
           NETEASE_PASSWORD: ${{ secrets.NETEASE_PASSWORD }}                                                                                                       
@@ -36,4 +36,4 @@ name: Refresh Cookie
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}                                                                                                           
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}                                                                                                                 
           SMTP_PORT: ${{ secrets.SMTP_PORT }}                                                                                                                     
-        run: python refresh_cookie.py         
+        run: python refresh_cookie.py     
