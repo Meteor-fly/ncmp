@@ -49,27 +49,33 @@ class AuthService:
                 return False, None
             
             # 使用 pyncm 登录
+            self.logger.info(f"正在调用 pyncm 登录接口...")
             result = LoginViaCellphone(phone, passwordHash=password_hash, ctcode=86)
-            
+
             # 检查登录结果
+            self.logger.info(f"登录接口返回: {result}")
             if result.get("code") != 200:
                 error_msg = result.get("message", "未知错误")
-                self.logger.error(f"登录失败: {error_msg}")
+                self.logger.error(f"登录失败，错误码: {result.get('code')}，错误信息: {error_msg}")
                 return False, None
             
             # 获取当前会话
             session = GetCurrentSession()
-            
+
             # 从会话的 cookies 中获取
             music_u_cookie = session.cookies.get('MUSIC_U')
             csrf_cookie = session.cookies.get('__csrf')
-            
+
+            self.logger.info(f"从会话中获取的 cookies - MUSIC_U: {'存在' if music_u_cookie else '不存在'}, __csrf: {'存在' if csrf_cookie else '不存在'}")
+
             if not music_u_cookie:
                 self.logger.error("未能从会话中获取 MUSIC_U cookie")
+                self.logger.debug(f"会话中的所有 cookies: {dict(session.cookies)}")
                 return False, None
-                
+
             if not csrf_cookie:
                 self.logger.error("未能从会话中获取 __csrf cookie")
+                self.logger.debug(f"会话中的所有 cookies: {dict(session.cookies)}")
                 return False, None
             
             # 构建返回的 Cookie 字典
