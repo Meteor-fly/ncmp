@@ -1,14 +1,15 @@
 name: Refresh Cookie
 
 on:
-  # schedule:
-  #   - cron: '0 14 * * 0'  # 已禁用：网易云音乐会触发滑动验证码，自动登录无法完成
-  workflow_dispatch:  # 保留手动触发，但建议直接更新 GitHub Secrets 中的 Cookie
+  schedule:
+    - cron: '0 14 * * 0'  # Every Sunday 14:00 UTC (Beijing 22:00)
+  workflow_dispatch:
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
-
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
