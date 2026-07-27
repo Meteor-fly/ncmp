@@ -87,12 +87,13 @@ def main():
             return
 
         task_mode = os.getenv("TASK_MODE", "") or "auto"
-        if task_mode == "auto":
-            # 自动模式：每周日执行完整任务（含额外任务），其余日期仅执行基础任务
-            is_sunday = datetime.now(SHANGHAI_TZ).weekday() == 6
-            run_extra = is_sunday
-        else:
-            run_extra = task_mode == "full"
+        run_extra = True
+        # if task_mode == "auto":
+        #     # 自动模式：每周日执行完整任务（含额外任务），其余日期仅执行基础任务
+        #     is_sunday = datetime.now(SHANGHAI_TZ).weekday() == 6
+        #     run_extra = is_sunday
+        # else:
+        #     run_extra = task_mode == "full"
 
         bot = MusicPartnerBot(config, logger, session)
         success = bot.run(run_extra=run_extra)
