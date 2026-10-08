@@ -3,8 +3,13 @@ from typing import Dict, Tuple, Optional
 from ..utils.logger import Logger
 
 try:
-    from pyncm.apis.login import LoginViaCellphone
-    from pyncm import GetCurrentSession, DumpSessionAsString
+    from pyncm.apis.login import (
+        LoginViaCellphone,
+        LoginRefreshToken,
+        LoginQrcodeUnikey,
+        LoginQrcodeCheck,
+    )
+    from pyncm import GetCurrentSession, DumpSessionAsString, SetNewSession
     PYNCM_AVAILABLE = True
 except ImportError:
     PYNCM_AVAILABLE = False
@@ -22,6 +27,137 @@ class AuthService:
         """将明文密码转换为 MD5 哈希"""
         return hashlib.md5(password.encode()).hexdigest()
         
+    def refresh_by_token(self, music_u: str, csrf: str = "") -> Tuple[bool, Optional[Dict[str, str]]]:
+        """
+        通过已有的 MUSIC_U 刷新登录态（/eapi/login/token/refresh）。
+
+        这是网页端"刷新登录令牌"接口，不需要重新输入密码，
+        因此不会触发网易云"需要行为验证码"（错误码 8821）风控，
+        适合在 GitHub Actions 这类数据中心 IP 环境下使用。
+        """
+        try:
+            self.logger.info("尝试使用现有 MUSIC_U 刷新登录态（token/refresh）")
+
+            # 使用全新会话，避免带上之前登录残留的状态
+            SetNewSession()
+            session = GetCurrentSession()
+            session.cookies.set("MUSIC_U", music_u, domain="music.163.com", path="/")
+            if csrf:
+                session.cookies.set("__csrf", csrf, domain="music.163.com", path="/")
+
+            result = LoginRefreshToken()
+
+            # 刷新失败，例如登录态已过期（返回 301）或触发风控
+            if result.get("code") != 200:
+                error_msg = result.get("message", "未知错误")
+                self.logger.error(f"刷新登录态失败，错误码: {result.get('code')}，错误信息: {error_msg}")
+                return False, None
+
+            # 新的 MUSIC_U 一般会通过 Set-Cookie 写回 session；
+            # 部分情况下只返回在 result['token'] 字段里，需要手动写回
+            new_music_u = session.cookies.get("MUSIC_U")
+            if (not new_music_u or new_music_u == music_u) and result.get("token"):
+                new_music_u = result["token"]
+                session.cookies.set("MUSIC_U", new_music_u, domain="music.163.com", path="/")
+
+            if not new_music_u:
+                self.logger.error("刷新登录态成功但未能获取到新的 MUSIC_U")
+                self.logger.debug(f"刷新接口返回: {result}")
+                return False, None
+
+            csrf_cookie = session.cookies.get("__csrf") or csrf
+
+            cookie_dict = {
+                "Cookie_MUSIC_U": new_music_u,
+                "Cookie___csrf": csrf_cookie,
+            }
+
+            self.logger.info("登录态刷新成功，已获取新的Cookie")
+            return True, cookie_dict
+
+        except Exception as e:
+            self.logger.error(f"pyncm 刷新登录态过程发生异常: {str(e)}")
+            return False, None
+
+    def login_by_qrcode(self, timeout: int = 180, csrf: str = "") -> Tuple[bool, Optional[Dict[str, str]]]:
+        """
+        通过扫码登录（手动兜底）。
+
+        当 token/refresh 与密码登录都失败时使用：生成二维码并以 ASCII 形式打印到
+        控制台/Actions 日志，用户用网易云音乐 App 扫码并确认后，轮询登录状态获取 Cookie。
+        二维码也会以可扫描 URL 的形式记录在日志里，打开浏览器扫码同样有效。
+        """
+        try:
+            import time
+
+            self.logger.info("尝试使用扫码登录（请在网易云音乐 App 中扫码确认）")
+
+            SetNewSession()
+            session = GetCurrentSession()
+
+            unikey_resp = LoginQrcodeUnikey()
+            unikey = unikey_resp.get("unikey")
+            if not unikey:
+                self.logger.error(f"获取二维码失败: {unikey_resp}")
+                return False, None
+
+            scan_url = f"https://music.163.com/login?codekey={unikey}"
+            self.logger.info(f"扫码地址: {scan_url}")
+
+            # 以 ASCII 二维码打印到控制台/Actions 日志，便于直接扫码
+            try:
+                import qrcode
+                qr = qrcode.QRCode(border=1)
+                qr.add_data(scan_url)
+                qr.make(fit=True)
+                qr.print_ascii()
+            except ImportError:
+                self.logger.warning("未安装 qrcode 库，无法打印二维码图片，请使用上方扫码地址")
+            except Exception as e:
+                self.logger.debug(f"二维码打印失败（不影响扫码地址）: {str(e)}")
+
+            # 轮询扫码状态：801=等待扫码，802=待确认，803=扫码成功，800=二维码过期
+            elapsed = 0
+            interval = 3
+            while elapsed < timeout:
+                result = LoginQrcodeCheck(unikey)
+                code = result.get("code")
+                if code == 803:
+                    self.logger.info("扫码登录成功")
+                    break
+                elif code == 800:
+                    self.logger.error("二维码已过期，请重新运行任务")
+                    return False, None
+                elif code in (801, 802):
+                    self.logger.debug(f"等待用户扫码/确认中 (code={code})")
+                else:
+                    self.logger.debug(f"扫码状态未知: {result}")
+                time.sleep(interval)
+                elapsed += interval
+            else:
+                self.logger.error("等待扫码超时，未完成登录")
+                return False, None
+
+            # 提取登录后的 Cookie
+            new_music_u = session.cookies.get("MUSIC_U")
+            if not new_music_u:
+                self.logger.error("扫码登录成功但未能获取到 MUSIC_U")
+                self.logger.debug(f"会话中的所有 cookies: {dict(session.cookies)}")
+                return False, None
+
+            csrf_cookie = session.cookies.get("__csrf") or csrf
+            cookie_dict = {
+                "Cookie_MUSIC_U": new_music_u,
+                "Cookie___csrf": csrf_cookie,
+            }
+
+            self.logger.info("扫码登录成功，已获取新的Cookie")
+            return True, cookie_dict
+
+        except Exception as e:
+            self.logger.error(f"pyncm 扫码登录过程发生异常: {str(e)}")
+            return False, None
+
     def login(self, phone: str, password: str = None, md5_password: str = None) -> Tuple[bool, Optional[Dict[str, str]]]:
         """
         通过手机号和密码登录获取 Cookie

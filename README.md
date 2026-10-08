@@ -75,6 +75,9 @@ ncmp(NetEase Cloud Music Partner/网易云音乐合伙人)
   - `NETEASE_PASSWORD`: 明文密码
   - `NETEASE_MD5_PASSWORD`: MD5加密密码
 - `GH_TOKEN`: 刚才创建的GitHub Token
+- `QR_LOGIN`: 是否启用扫码登录兜底（可选，默认启用，设 `false` 关闭）
+
+> **登录顺序说明**：刷新Cookie时会依次尝试 ① 用已有 `MUSIC_U` 调用 `token/refresh` 续期（推荐，不触发风控）→ ② 密码登录（仅在本地/家庭网络等可信IP下可用，GitHub Actions 的数据中心IP会触发网易云"行为验证码"8821）→ ③ 扫码登录兜底（二维码以ASCII形式打印到 Actions 日志，用网易云音乐 App 扫码并确认即可）。
 
 #### 5. 启用自动刷新工作流
 

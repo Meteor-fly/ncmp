@@ -31,6 +31,7 @@ jobs:
         NETEASE_PHONE: ${{ secrets.NETEASE_PHONE }}
         NETEASE_PASSWORD: ${{ secrets.NETEASE_PASSWORD }}
         NETEASE_MD5_PASSWORD: ${{ secrets.NETEASE_MD5_PASSWORD }}
+        QR_LOGIN: ${{ secrets.QR_LOGIN }}
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
         GH_REPO: ${{ github.repository }}
         NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
