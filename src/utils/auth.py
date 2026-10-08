@@ -26,7 +26,17 @@ class AuthService:
     def _hash_password(self, password: str) -> str:
         """将明文密码转换为 MD5 哈希"""
         return hashlib.md5(password.encode()).hexdigest()
-        
+
+    @staticmethod
+    def _collect_cookie(session, name: str) -> list:
+        """安全读取 session 中某名称的所有 Cookie 值。
+
+        requests 的 RequestsCookieJar 在存在同名但 domain/path 不同的 Cookie 时，
+        直接 `session.cookies.get(name)` 会抛 'There are multiple cookies with name'
+        异常，这里通过遍历绕开该问题。
+        """
+        return [c.value for c in session.cookies if c.name == name]
+
     def refresh_by_token(self, music_u: str, csrf: str = "") -> Tuple[bool, Optional[Dict[str, str]]]:
         """
         通过已有的 MUSIC_U 刷新登录态（/eapi/login/token/refresh）。
@@ -53,19 +63,24 @@ class AuthService:
                 self.logger.error(f"刷新登录态失败，错误码: {result.get('code')}，错误信息: {error_msg}")
                 return False, None
 
-            # 新的 MUSIC_U 一般会通过 Set-Cookie 写回 session；
-            # 部分情况下只返回在 result['token'] 字段里，需要手动写回
-            new_music_u = session.cookies.get("MUSIC_U")
-            if (not new_music_u or new_music_u == music_u) and result.get("token"):
+            # 服务端 Set-Cookie 会写入新的 MUSIC_U，与预置的旧值并存（同名不同域），
+            # 直接 session.cookies.get("MUSIC_U") 会抛 'multiple cookies' 异常。
+            # 这里取与旧值不同的新值；若服务端未更新 Cookie，则回退 result['token']。
+            music_u_values = self._collect_cookie(session, "MUSIC_U")
+            new_music_u = next((v for v in music_u_values if v != music_u), None)
+            if new_music_u is None and result.get("token"):
                 new_music_u = result["token"]
-                session.cookies.set("MUSIC_U", new_music_u, domain="music.163.com", path="/")
+            if new_music_u is None:
+                new_music_u = music_u_values[0] if music_u_values else None
 
             if not new_music_u:
                 self.logger.error("刷新登录态成功但未能获取到新的 MUSIC_U")
                 self.logger.debug(f"刷新接口返回: {result}")
                 return False, None
 
-            csrf_cookie = session.cookies.get("__csrf") or csrf
+            # 同样安全地读取新的 __csrf，优先取与旧值不同的新值
+            csrf_values = self._collect_cookie(session, "__csrf")
+            csrf_cookie = next((v for v in csrf_values if v != csrf), None) or csrf
 
             cookie_dict = {
                 "Cookie_MUSIC_U": new_music_u,
@@ -152,14 +167,16 @@ class AuthService:
                 self.logger.error("等待扫码超时，未完成登录")
                 return False, None
 
-            # 提取登录后的 Cookie
-            new_music_u = session.cookies.get("MUSIC_U")
+            # 提取登录后的 Cookie（使用安全读取，避免同名 Cookie 冲突）
+            music_u_values = self._collect_cookie(session, "MUSIC_U")
+            new_music_u = music_u_values[0] if music_u_values else None
             if not new_music_u:
                 self.logger.error("扫码登录成功但未能获取到 MUSIC_U")
                 self.logger.debug(f"会话中的所有 cookies: {dict(session.cookies)}")
                 return False, None
 
-            csrf_cookie = session.cookies.get("__csrf") or csrf
+            csrf_values = self._collect_cookie(session, "__csrf")
+            csrf_cookie = csrf_values[0] if csrf_values else csrf
             cookie_dict = {
                 "Cookie_MUSIC_U": new_music_u,
                 "Cookie___csrf": csrf_cookie,
@@ -186,6 +203,9 @@ class AuthService:
         """
         try:
             self.logger.info(f"尝试使用 pyncm 登录账号: {phone[:3]}****{phone[-4:]}")
+
+            # 使用全新会话，避免沿用之前失败尝试留下的 Cookie，防止同名冲突
+            SetNewSession()
             
             # 确定使用哪种密码
             if md5_password:
@@ -212,9 +232,11 @@ class AuthService:
             # 获取当前会话
             session = GetCurrentSession()
 
-            # 从会话的 cookies 中获取
-            music_u_cookie = session.cookies.get('MUSIC_U')
-            csrf_cookie = session.cookies.get('__csrf')
+            # 从会话的 cookies 中获取（使用安全读取，避免同名 Cookie 冲突）
+            music_u_values = self._collect_cookie(session, "MUSIC_U")
+            music_u_cookie = music_u_values[0] if music_u_values else None
+            csrf_values = self._collect_cookie(session, "__csrf")
+            csrf_cookie = csrf_values[0] if csrf_values else None
 
             self.logger.info(f"从会话中获取的 cookies - MUSIC_U: {'存在' if music_u_cookie else '不存在'}, __csrf: {'存在' if csrf_cookie else '不存在'}")
 
