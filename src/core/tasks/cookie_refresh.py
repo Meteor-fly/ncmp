@@ -57,13 +57,29 @@ class CookieRefreshTask:
                     )
 
             # 第 3 步：扫码登录兜底。
-            # 二维码以 ASCII 形式打印到控制台/Actions 日志，用网易云音乐 App 扫码并确认即可。
+            # 二维码生成后同时推送到邮箱（若有配置通知邮箱），手机上收邮件即可扫码，
+            # 无需打开 GitHub。同时也会以 ASCII 形式打印到控制台/Actions 日志。
             # 可通过环境变量 QR_LOGIN=false 关闭。
             if not success:
                 qr_enabled = os.environ.get("QR_LOGIN", "true").lower() in ("1", "true", "yes")
                 if qr_enabled:
                     self.logger.warning("token/refresh 与密码登录均失败，尝试扫码登录兜底")
-                    success, cookies = self.auth_service.login_by_qrcode(csrf=csrf or "")
+
+                    def notify_qr(scan_url: str, ascii_qr: str) -> None:
+                        if self.notifier:
+                            qr_text = ascii_qr or "（当前环境未安装 qrcode 库，无法渲染二维码图片）"
+                            self.notifier.send_notification(
+                                "网易云音乐合伙人 - 请扫码登录",
+                                f"扫码地址（也可在手机浏览器打开后跳转 App 确认）：\n{scan_url}\n\n"
+                                f"请在网易云音乐 App 中扫码并确认，二维码约 3 分钟内有效：\n\n{qr_text}"
+                            )
+                        else:
+                            self.logger.warning("未配置通知邮箱，二维码仅打印在 Actions 日志中")
+
+                    success, cookies = self.auth_service.login_by_qrcode(
+                        csrf=csrf or "",
+                        notify_qr=notify_qr,
+                    )
                 else:
                     self.logger.warning("扫码登录已被禁用（QR_LOGIN=false），跳过")
 

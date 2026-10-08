@@ -1,5 +1,5 @@
 import hashlib
-from typing import Dict, Tuple, Optional
+from typing import Callable, Dict, Tuple, Optional
 from ..utils.logger import Logger
 
 try:
@@ -79,15 +79,19 @@ class AuthService:
             self.logger.error(f"pyncm 刷新登录态过程发生异常: {str(e)}")
             return False, None
 
-    def login_by_qrcode(self, timeout: int = 180, csrf: str = "") -> Tuple[bool, Optional[Dict[str, str]]]:
+    def login_by_qrcode(self, timeout: int = 180, csrf: str = "", notify_qr: Optional[Callable[[str, str], None]] = None) -> Tuple[bool, Optional[Dict[str, str]]]:
         """
         通过扫码登录（手动兜底）。
 
         当 token/refresh 与密码登录都失败时使用：生成二维码并以 ASCII 形式打印到
         控制台/Actions 日志，用户用网易云音乐 App 扫码并确认后，轮询登录状态获取 Cookie。
         二维码也会以可扫描 URL 的形式记录在日志里，打开浏览器扫码同样有效。
+
+        notify_qr: 可选回调，二维码生成后调用，参数为 (扫码地址, ASCII二维码文本)，
+                   用于把二维码推送到邮箱等渠道，方便在手机上直接扫码，无需打开 GitHub。
         """
         try:
+            import io
             import time
 
             self.logger.info("尝试使用扫码登录（请在网易云音乐 App 中扫码确认）")
@@ -104,17 +108,27 @@ class AuthService:
             scan_url = f"https://music.163.com/login?codekey={unikey}"
             self.logger.info(f"扫码地址: {scan_url}")
 
-            # 以 ASCII 二维码打印到控制台/Actions 日志，便于直接扫码
+            # 以 ASCII 二维码打印到控制台/Actions 日志，并可选推送到邮箱
+            ascii_qr = ""
             try:
                 import qrcode
                 qr = qrcode.QRCode(border=1)
                 qr.add_data(scan_url)
                 qr.make(fit=True)
-                qr.print_ascii()
+                buf = io.StringIO()
+                qr.print_ascii(out=buf)
+                ascii_qr = buf.getvalue()
+                print(ascii_qr, end="")
             except ImportError:
                 self.logger.warning("未安装 qrcode 库，无法打印二维码图片，请使用上方扫码地址")
             except Exception as e:
                 self.logger.debug(f"二维码打印失败（不影响扫码地址）: {str(e)}")
+
+            if notify_qr:
+                try:
+                    notify_qr(scan_url, ascii_qr)
+                except Exception as e:
+                    self.logger.debug(f"推送二维码通知失败: {str(e)}")
 
             # 轮询扫码状态：801=等待扫码，802=待确认，803=扫码成功，800=二维码过期
             elapsed = 0
