@@ -1,8 +1,8 @@
 name: Refresh Cookie
 
 on:
-  # schedule:
-  #   - cron: '0 14 * * 0'  # Disabled: NetEase triggers captcha, auto login fails
+  schedule:
+    - cron: '0 14 * * 0'  # 每周日 UTC 14:00（北京时间 22:00）自动刷新 Cookie
   workflow_dispatch:
 
 jobs:
