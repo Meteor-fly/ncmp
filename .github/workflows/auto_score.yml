@@ -2,7 +2,10 @@ name: Auto Score
 
 on:
   schedule:
-    - cron: '30 11 * * *'  # 19:30 Asia/Shanghai
+    # GitHub Actions 定时任务存在不可控的排队延迟（实测可达数小时）。
+    # 这里提前到 07:30 UTC（= 15:30 北京时间）触发，脚本内部会等待到 19:00（北京时间）再开始评分，
+    # 从而保证实际评分准点发生在 19:00。
+    - cron: '30 7 * * *'  # 提前触发，实际评分时间由脚本控制为 19:00 Asia/Shanghai
   workflow_dispatch:
 
 jobs:

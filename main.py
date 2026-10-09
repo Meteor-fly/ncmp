@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -62,11 +63,46 @@ def build_report(logger: Logger, status: str, summary: str) -> str:
     return "\n".join(lines)
 
 
+def wait_until_run_time():
+    """等待到指定北京时间再开始评分。
+
+    GitHub Actions 的 schedule 任务存在短至几分钟、长至数小时的不确定延迟，
+    cron 只能决定“最晚在哪个时刻前开始排队”，无法保证准点。因此 workflow 提前触发，
+    由这里精确控制实际评分的时刻（默认北京时间 19:00）。
+    """
+    if os.getenv("GITHUB_EVENT_NAME") != "schedule":
+        return  # 手动触发的任务不等待
+
+    target_env = os.getenv("TARGET_RUN_TIME", "19:00")
+    try:
+        target_hour, target_minute = (int(part) for part in target_env.split(":"))
+    except ValueError:
+        print(f"[wait] TARGET_RUN_TIME 格式无效: {target_env!r}，跳过等待")
+        return
+
+    now = datetime.now(SHANGHAI_TZ)
+    target = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
+    wait_seconds = (target - now).total_seconds()
+
+    # 排队太久（已超过目标时刻）时不再等待，直接执行；等待过长无意义。
+    if wait_seconds <= 0:
+        print(f"[wait] 当前已是 {now:%H:%M:%S}，已过目标时刻 {target_env}，直接开始执行")
+        return
+    if wait_seconds > 6 * 3600:
+        print(f"[wait] 需等待 {wait_seconds / 3600:.1f} 小时，超过 6 小时上限，直接开始执行")
+        return
+
+    print(f"[wait] 当前 {now:%H:%M:%S}，等待至北京时间 {target_env}（还需 {wait_seconds / 60:.0f} 分钟）")
+    time.sleep(wait_seconds)
+    print(f"[wait] 到达目标时刻 {target_env}，开始执行")
+
+
 def main():
     logger = None
     notifier = None
 
     try:
+        wait_until_run_time()
         config = Config()
         logger = Logger()
         notifier = NotificationService(config, logger)
