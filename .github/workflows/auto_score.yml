@@ -26,6 +26,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Install QR fallback dependencies
+        continue-on-error: true
+        run: |
+          python -m pip install "qrcode>=7.0"
+          python -m pip install "pyncm @ git+https://github.com/lmc2007/pyncmfork.git"
+
       - name: Run script
         env:
           TZ: Asia/Shanghai
@@ -41,4 +47,7 @@ jobs:
           TASK_MODE: ${{ secrets.TASK_MODE }}
           FULL_EXTRA_TASKS: ${{ secrets.FULL_EXTRA_TASKS }}
           SYNC_YUN_CIRCLE: ${{ secrets.SYNC_YUN_CIRCLE }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          QR_LOGIN: ${{ secrets.QR_LOGIN }}
         run: python main.py
